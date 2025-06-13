@@ -2,3 +2,6 @@
 .env
 tests
 .vscode
+artifacts
+logs
+.vscode

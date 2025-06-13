@@ -5,12 +5,17 @@ import sys
 import glob
 import uuid
 import datetime
+from pathlib import Path
+import psycopg2
 
 from pyspark.sql import SparkSession, Row
 from pyspark.sql.types import (
     StructType, StructField,
     StringType, LongType, DoubleType, TimestampType
 )
+
+BASE_DIR = Path(__file__).resolve().parent
+DATA_DIR = BASE_DIR.parent / "data"
 
 def find_input_file(data_dir: str) -> str:
     pattern = os.path.join(data_dir, "*failure_sensors*.txt")
@@ -82,7 +87,7 @@ def parse_line_to_row(line: str):
 
 
 # permite override via ENV ou usa /data montado pelo Compose
-data_dir   = "/data"
+data_dir   = DATA_DIR
 #data_dir   = "./data"
 input_file = find_input_file(data_dir)
 
@@ -111,17 +116,20 @@ schema = StructType([
 final_df = spark.createDataFrame(rdd, schema)
 
 # escreve via JDBC no Postgres
-'''
+
+jdbc_ur = ( "jdbc:postgresql://postgres:5432/fpso"
+           "?stringtype=unspecified")
+
 final_df.write \
 	.format("jdbc") \
-	.option("url",      "jdbc:postgresql://postgres:5433/fpso") \
+	.option("url",      jdbc_ur) \
 	.option("dbtable",  "bronze.equipment_failure_sensors") \
 	.option("user",     "shape") \
 	.option("password", "shape") \
 	.option("driver",   "org.postgresql.Driver") \
-	.mode("append") \
+	.mode("overwrite") \
 	.save()
-'''
+
 final_df.show(50, truncate=False)
 spark.stop()
 sys.exit(0)

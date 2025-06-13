@@ -11,10 +11,10 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      test:     ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
       interval: 10s
-      timeout: 5s
-      retries: 5
+      timeout:  5s
+      retries:  5
 
   pgadmin:
     image: dpage/pgadmin4:9.4
@@ -30,55 +30,20 @@ services:
     volumes:
       - pgadmin_data:/var/lib/pgadmin
 
-  airflow-webserver:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: data-pipeline-base:latest
-    restart: unless-stopped
-    depends_on:
-      postgres:
-        condition: service_healthy
-    environment:
-      AIRFLOW__CORE__EXECUTOR:          ${AIRFLOW__CORE__EXECUTOR}
-      AIRFLOW__CORE__SQL_ALCHEMY_CONN:  ${AIRFLOW__CORE__SQL_ALCHEMY_CONN}
-      AIRFLOW__CORE__FERNET_KEY:        ${AIRFLOW__CORE__FERNET_KEY}
-      AIRFLOW__CORE__AUTH_MANAGER: "airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager"
-      _AIRFLOW_WWW_USER_CREATE:   "True"
-      _AIRFLOW_WWW_USER_USERNAME: ${_AIRFLOW_WWW_USER_USERNAME}
-      _AIRFLOW_WWW_USER_PASSWORD: ${_AIRFLOW_WWW_USER_PASSWORD}
-      _AIRFLOW_WWW_USER_ROLE:     Admin
-      SPARK_HOME: /usr/local/lib/python3.12/site-packages/pyspark
-      _AIRFLOW_DB_MIGRATE: "true"
+  spark:
+    build: .
+    env_file:
+      - .env
     volumes:
-      - ./dags:/opt/airflow/dags
-      - ./logs:/opt/airflow/logs
-      - ./data:/data
-    ports:
-      - "8080:8080"
-    command: ["airflow", "api-server"]
-
-  airflow-scheduler:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: data-pipeline-base:latest
-    restart: unless-stopped
+      - ./scripts:/app/scripts
+      - ./data:/app/data
     depends_on:
-      postgres:
-        condition: service_healthy
-    environment:
-      AIRFLOW__CORE__EXECUTOR:          ${AIRFLOW__CORE__EXECUTOR}
-      AIRFLOW__CORE__SQL_ALCHEMY_CONN:  ${AIRFLOW__CORE__SQL_ALCHEMY_CONN}
-      AIRFLOW__CORE__FERNET_KEY:        ${AIRFLOW__CORE__FERNET_KEY}
-      SPARK_HOME: /usr/local/lib/python3.12/site-packages/pyspark
-      _AIRFLOW_DB_MIGRATE: "true"
-    volumes:
-      - ./dags:/opt/airflow/dags
-      - ./logs:/opt/airflow/logs
-      - ./data:/data
-    command: ["airflow", "scheduler"]
+      - postgres
+    # comando padrão já vem do ENTRYPOINT do Dockerfile,
+    # aqui apenas indicamos o script a executar:
+    command: ["scripts/ingest_failures.py"]
 
+  
 volumes:
   pgdata:
   pgadmin_data:
