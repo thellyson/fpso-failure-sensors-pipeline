@@ -1,25 +1,23 @@
+# Dockerfile
 FROM apache/airflow:3.0.2-python3.12
+# imagem oficial com Python 3.12 e Airflow 3.0.2 :contentReference[oaicite:4]{index=4}
 
 USER root
+
+# Instala Java (JRE) necessário para rodar PySpark
 RUN apt-get update \
- && apt-get install -y --no-install-recommends \
-      openjdk-17-jdk-headless \
-      wget \
- && rm -rf /var/lib/apt/lists/*
+    && apt-get install -y openjdk-17-jre-headless \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copia as dependências Python e instala
+USER airflow
+COPY requirements.txt /requirements.txt
+RUN pip install --no-cache-dir -r /requirements.txt
 
 USER airflow
-COPY requirements.txt /tmp/requirements.txt
-RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
-USER root
-RUN mkdir -p /opt/airflow/jars \
- && wget -q https://jdbc.postgresql.org/download/postgresql-42.7.6.jar \
-       -O /opt/airflow/jars/postgresql-42.7.6.jar
-
-ENV SPARK_HOME=/usr/local/lib/python3.10/site-packages/pyspark
-ENV PYTHONPATH=$SPARK_HOME/python:$SPARK_HOME/python/lib/py4j-*.zip:$PYTHONPATH
-
-COPY spark-defaults.conf $SPARK_HOME/conf/spark-defaults.conf
-
-USER airflow
-RUN airflow db init
+# Configurações de ambiente para o Spark
+ENV SPARK_HOME=/usr/local/lib/python3.12/site-packages/pyspark
+ENV PATH="$SPARK_HOME/bin:${PATH}"
+ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
