@@ -34,6 +34,10 @@ services:
     build: .
     env_file:
       - .env
+    environment:
+      - SPARK_DRIVER_MEMORY=4g
+      - SPARK_EXECUTOR_MEMORY=4g
+      - SPARK_DRIVER_MAXRESULTSIZE=2g  
     volumes:
       - ./scripts:/app/scripts
       - ./data:/app/data
@@ -41,7 +45,7 @@ services:
       - postgres
     # comando padrão já vem do ENTRYPOINT do Dockerfile,
     # aqui apenas indicamos o script a executar:
-    command: ["scripts/ingest_failures.py"]
+    command: ["scripts/gold_equipment_failures_summary.py"]
 
   
 volumes:

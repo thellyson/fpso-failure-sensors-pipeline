@@ -28,22 +28,22 @@ TIMESTAMP_RE = re.compile(
 # permite override via ENV ou usa /data montado pelo Compose
 data_dir   = DATA_DIR
 #data_dir   = "./data"
-input_file = find_input_file(data_dir, "equipment", "json")
+input_file = find_input_file(data_dir, "equipment_sensors", "csv")
 
 spark = SparkSession.builder \
-	.appName("bronze_ingest_equipments") \
+	.appName("bronze_ingest_equipment_sensors") \
 	.getOrCreate()
 
 
 # Definição do esquema
 schema = StructType([
     StructField("equipment_id", LongType(), False),
-    StructField("name", StringType(), False),
-    StructField("group_name", StringType(), False)
+	StructField("sensor_id", LongType(), False)
 ])
 
-# Ler o arquivo JSON com o esquema
-df = spark.read.json(input_file, schema=schema, multiLine=True)
+
+# Ler o arquivo CSV com cabeçalho
+df = spark.read.csv(input_file, schema=schema, header=True)
 
 # JDBC URL para Postgres
 jdbc_url = "jdbc:postgresql://postgres:5432/fpso?stringtype=unspecified"
@@ -51,7 +51,7 @@ jdbc_url = "jdbc:postgresql://postgres:5432/fpso?stringtype=unspecified"
 df.write \
 	.format("jdbc") \
 	.option("url",      jdbc_url) \
-	.option("dbtable",  "bronze.equipment") \
+	.option("dbtable",  "bronze.equipment_sensors") \
 	.option("user",     "shape") \
 	.option("password", "shape") \
 	.option("driver",   "org.postgresql.Driver") \

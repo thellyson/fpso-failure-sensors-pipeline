@@ -7,6 +7,7 @@ import uuid
 import datetime
 from pathlib import Path
 import psycopg2
+from functions.util import find_input_file
 
 from pyspark.sql import SparkSession, Row
 from pyspark.sql.types import (
@@ -17,13 +18,6 @@ from pyspark.sql.types import (
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR.parent / "data"
 
-def find_input_file(data_dir: str) -> str:
-    pattern = os.path.join(data_dir, "*failure_sensors*.txt")
-    matches = glob.glob(pattern)
-    if len(matches) != 1:
-        print(f"[Erro] Esperava um único arquivo em '{data_dir}' que case com '*failure_sensors*.txt', achei: {matches}")
-        sys.exit(1)
-    return matches[0]
 
 TIMESTAMP_RE = re.compile(
     r"\[(\d{4})[-/](\d{1,2})[-/](\d{1,2})"             # data YYYY-M-D ou YYYY/M/D
@@ -89,7 +83,7 @@ def parse_line_to_row(line: str):
 # permite override via ENV ou usa /data montado pelo Compose
 data_dir   = DATA_DIR
 #data_dir   = "./data"
-input_file = find_input_file(data_dir)
+input_file = find_input_file(data_dir, "equpment_failure_sensors", "txt")
 
 spark = SparkSession.builder \
 	.appName("bronze_ingest_failures") \
