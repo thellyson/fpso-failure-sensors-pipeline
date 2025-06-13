@@ -130,6 +130,7 @@ final_df.write \
 	.mode("overwrite") \
 	.save()
 
+
 final_df.show(50, truncate=False)
 spark.stop()
 sys.exit(0)
