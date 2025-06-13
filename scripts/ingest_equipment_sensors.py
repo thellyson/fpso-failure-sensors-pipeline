@@ -1,4 +1,5 @@
 import os
+from functions.env_config import get_jdbc_url, get_jdbc_opts
 import re
 import sys
 import glob
@@ -46,15 +47,14 @@ schema = StructType([
 df = spark.read.csv(input_file, schema=schema, header=True)
 
 # JDBC URL para Postgres
-jdbc_url = "jdbc:postgresql://postgres:5432/fpso?stringtype=unspecified"
+jdbc_url    = get_jdbc_url()
+common_opts = get_jdbc_opts()
 
 df.write \
 	.format("jdbc") \
 	.option("url",      jdbc_url) \
 	.option("dbtable",  "bronze.equipment_sensors") \
-	.option("user",     "shape") \
-	.option("password", "shape") \
-	.option("driver",   "org.postgresql.Driver") \
+	.options(**common_opts) \
 	.mode("overwrite") \
 	.save()
 

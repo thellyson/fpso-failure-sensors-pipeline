@@ -1,5 +1,5 @@
-#!/usr/bin/env python3
 import sys
+from functions.env_config import get_jdbc_url, get_jdbc_opts
 from pathlib import Path
 import psycopg2
 from pyspark.sql import SparkSession
@@ -25,19 +25,15 @@ spark = SparkSession.builder \
     .config("spark.driver.memory", "2g") \
     .getOrCreate()
 
-jdbc_url = "jdbc:postgresql://postgres:5432/fpso?stringtype=unspecified"
-common_opts = {
-    "user": "shape",
-    "password": "shape",
-    "driver": "org.postgresql.Driver",
-    "fetchsize": "1000"
-}
+jdbc_url    = get_jdbc_url()
+common_opts = get_jdbc_opts()
 
 # 3) Leitura das tabelas bronze sem particionamento pesado
 equipments_df = spark.read.format("jdbc") \
     .option("url", jdbc_url) \
     .options(**common_opts) \
     .option("dbtable", "bronze.equipment") \
+	.option("fetchsize", "1000") \
     .load()
 
 sensors_df = spark.read.format("jdbc") \

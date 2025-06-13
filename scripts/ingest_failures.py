@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import os
+from functions.env_config import get_jdbc_url, get_jdbc_opts
 import re
 import sys
 import glob
@@ -111,16 +112,14 @@ final_df = spark.createDataFrame(rdd, schema)
 
 # escreve via JDBC no Postgres
 
-jdbc_ur = ( "jdbc:postgresql://postgres:5432/fpso"
-           "?stringtype=unspecified")
+jdbc_url    = get_jdbc_url()
+common_opts = get_jdbc_opts()
 
 final_df.write \
 	.format("jdbc") \
-	.option("url",      jdbc_ur) \
+	.option("url",      jdbc_url) \
 	.option("dbtable",  "bronze.equipment_failure_sensors") \
-	.option("user",     "shape") \
-	.option("password", "shape") \
-	.option("driver",   "org.postgresql.Driver") \
+	.options(**common_opts) \
 	.mode("overwrite") \
 	.save()
 

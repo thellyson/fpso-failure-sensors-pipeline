@@ -1,4 +1,5 @@
 import sys
+from functions.env_config import get_jdbc_url, get_jdbc_opts
 from pathlib import Path
 
 from pyspark.sql import SparkSession
@@ -15,12 +16,8 @@ spark = SparkSession.builder \
     .getOrCreate()
 
 # 2) Opções JDBC comuns
-jdbc_url = "jdbc:postgresql://postgres:5432/fpso?stringtype=unspecified"
-common_opts = {
-    "user": "shape",
-    "password": "shape",
-    "driver": "org.postgresql.Driver"
-}
+jdbc_url    = get_jdbc_url()
+common_opts = get_jdbc_opts()
 
 # 3) Leitura da tabela silver.equipment_failure_sensors
 silver_df = spark.read.format("jdbc") \
