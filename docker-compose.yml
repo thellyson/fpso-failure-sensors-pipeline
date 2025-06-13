@@ -45,7 +45,7 @@ services:
       - postgres
     # comando padrão já vem do ENTRYPOINT do Dockerfile,
     # aqui apenas indicamos o script a executar:
-    command: ["scripts/gold_equipment_failures_summary.py"]
+    command: ["scripts/run_pipeline.py"]
 
   
 volumes:
