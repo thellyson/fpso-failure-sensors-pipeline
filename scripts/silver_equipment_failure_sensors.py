@@ -62,8 +62,11 @@ failures_df = spark.read.format("jdbc") \
     .option("numPartitions", "10") \
     .load()
 
-# 5) Junta e seleciona colunas finais para silver
 
+# 4.5) Filtra apenas as linhas com type_msg = 'ERROR'
+failures_df = failures_df.where("type_msg = 'ERROR'")
+
+# 5) Junta e seleciona colunas finais para silver
 silver_df = (failures_df
     .join(sensors_df.select("sensor_id","equipment_id"),
           on="sensor_id", how="left")
