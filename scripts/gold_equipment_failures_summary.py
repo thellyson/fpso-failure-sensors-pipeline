@@ -1,3 +1,5 @@
+import os
+import re
 import sys
 from functions.env_config import get_jdbc_url, get_jdbc_opts
 from pathlib import Path
@@ -5,14 +7,19 @@ from pathlib import Path
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import count, avg, rank, col, first
 from pyspark.sql.window import Window
+import psycopg2
+from psycopg2.extras import execute_values
+from functions.env_config import get_jdbc_url, get_jdbc_opts
 
 # diretório base (assume que o script ficará em dags/scripts)
 BASE_DIR = Path(__file__).resolve().parent
+
 
 # 1) Cria sessão Spark
 spark = SparkSession.builder \
     .appName("gold_equipment_failures_summary") \
     .config("spark.driver.memory", "2g") \
+    .config("spark.sql.shuffle.partitions", "20") \
     .getOrCreate()
 
 # 2) Opções JDBC comuns
@@ -26,6 +33,9 @@ silver_df = spark.read.format("jdbc") \
     .option("dbtable", "silver.equipment_failure_sensors") \
     .option("fetchsize", "1000") \
     .load()
+
+#Cache
+silver_df = silver_df.cache()
 
 # 4) Agregações:
 
@@ -80,17 +90,17 @@ gold_df = (
     )
 )
 
-# 6) Grava em Postgres no schema gold.equipment_failures_summary
+#Escrita na tabela
 gold_df.write \
     .format("jdbc") \
     .option("url", jdbc_url) \
-    .options(**common_opts) \
     .option("dbtable", "gold.equipment_failures_summary") \
+    .options(**common_opts, batchsize="1000") \
     .mode("overwrite") \
+    .option("truncate", "true") \
     .save()
 
-# 7) Exibe amostra para conferência
-gold_df.show(50, truncate=False)
+print("Tabela gold.equipment_failures_summary atualizada (overwrite).")
 
 spark.stop()
 sys.exit(0)

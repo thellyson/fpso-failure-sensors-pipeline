@@ -50,5 +50,6 @@ CREATE TABLE IF NOT EXISTS gold.equipment_failures_summary (
   sensor_id                     BIGINT,
   sensor_failures               BIGINT,
   sensor_rank_by_equipment      BIGINT,
-  sensor_rank_by_equipment_group BIGINT
+  sensor_rank_by_equipment_group BIGINT,
+  PRIMARY KEY (group_name, name, equipment_id, sensor_id)
 );

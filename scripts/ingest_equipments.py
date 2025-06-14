@@ -50,15 +50,31 @@ df = spark.read.json(input_file, schema=schema, multiLine=True)
 jdbc_url   = get_jdbc_url()
 common_opts = get_jdbc_opts()
 
-df.write \
-	.format("jdbc") \
-	.option("url",      jdbc_url) \
-	.option("dbtable",  "bronze.equipment") \
-	.options(**common_opts) \
-	.mode("overwrite") \
-	.save()
+#Carrega os equipment_id já existentes
+existing = spark.read.format("jdbc") \
+    .option("url", jdbc_url) \
+    .options(**common_opts) \
+    .option("dbtable", "bronze.equipment") \
+    .load() \
+    .select("equipment_id")
+
+#Filtra apenas os novos
+new_equip = df.join(existing, on="equipment_id", how="left_anti")
+
+#Apenas insere se houver novidade
+if new_equip.rdd.isEmpty():
+    print("Nenhum equipamento novo para inserir.")
+else:
+    new_equip.write \
+        .format("jdbc") \
+        .option("url", jdbc_url) \
+        .option("dbtable", "bronze.equipment") \
+        .options(**common_opts) \
+        .mode("append") \
+        .save()
+    print(f"{new_equip.count()} equipamento(s) inserido(s).")
 
 
-df.show(50, truncate=False)
+new_equip.show(50, truncate=False)
 spark.stop()
 sys.exit(0)

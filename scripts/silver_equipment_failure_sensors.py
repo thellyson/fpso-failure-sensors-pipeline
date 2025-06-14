@@ -23,6 +23,7 @@ conn.close()
 spark = SparkSession.builder \
     .appName("silver_ingest_equipment_failure_sensors") \
     .config("spark.driver.memory", "2g") \
+    .config("spark.sql.shuffle.partitions", "20") \
     .getOrCreate()
 
 jdbc_url    = get_jdbc_url()
@@ -41,6 +42,10 @@ sensors_df = spark.read.format("jdbc") \
     .options(**common_opts) \
     .option("dbtable", "bronze.equipment_sensors") \
     .load()
+
+#Cache
+equipments_df = equipments_df.cache()
+sensors_df    = sensors_df.cache()
 
 # 4) Leitura particionada por número de linha (row_number)  
 #    subconsulta adiciona coluna rn de 1 até total_rows
@@ -81,17 +86,34 @@ silver_df = (failures_df
     )
 )
 
-# 6) Grava no Postgres em silver.equipment_failure_sensors
-silver_df.write \
-    .format("jdbc") \
+
+# 6) Carrega silver existente
+existing_silver = spark.read.format("jdbc") \
     .option("url", jdbc_url) \
     .options(**common_opts) \
     .option("dbtable", "silver.equipment_failure_sensors") \
-    .mode("overwrite") \
-    .save()
+    .load() \
+    .select("id")
 
-# 7) Mostra amostra para verificação
-silver_df.show(50, truncate=False)
+
+# 7) Filtra só registros novos
+to_insert = silver_df.join(existing_silver, on="id", how="left_anti")
+
+# 8) Insere registros novos
+if to_insert.rdd.isEmpty():
+    print("Nenhuma linha nova para Silver.")
+else:
+    to_insert.write \
+        .format("jdbc") \
+        .option("url", jdbc_url) \
+        .option("dbtable", "silver.equipment_failure_sensors") \
+        .options(**common_opts, batchsize="1000") \
+        .mode("append") \
+        .save()
+    print(f"{to_insert.count()} linha(s) inserida(s) em Silver.")
+
+# 9) Mostra amostra para verificação
+to_insert.show(50, truncate=False)
 
 spark.stop()
 sys.exit(0)

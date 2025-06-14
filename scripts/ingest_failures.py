@@ -111,19 +111,34 @@ schema = StructType([
 final_df = spark.createDataFrame(rdd, schema)
 
 # escreve via JDBC no Postgres
-
 jdbc_url    = get_jdbc_url()
 common_opts = get_jdbc_opts()
 
-final_df.write \
-	.format("jdbc") \
-	.option("url",      jdbc_url) \
-	.option("dbtable",  "bronze.equipment_failure_sensors") \
-	.options(**common_opts) \
-	.mode("overwrite") \
-	.save()
+
+#Carrega ids já gravados
+existing_ids = spark.read.format("jdbc") \
+    .option("url", jdbc_url) \
+    .options(**common_opts) \
+    .option("dbtable", "bronze.equipment_failure_sensors") \
+    .load() \
+    .select("id")
+
+#Filtra apenas as falhas novas
+delta = final_df.join(existing_ids, on="id", how="left_anti")
+
+if delta.rdd.isEmpty():
+    print("Nenhuma falha nova para inserir.")
+else:
+    delta.write \
+        .format("jdbc") \
+        .option("url", jdbc_url) \
+        .option("dbtable", "bronze.equipment_failure_sensors") \
+        .options(**common_opts) \
+        .mode("append") \
+        .save()
+    print(f"{delta.count()} falha(s) inserida(s).")
 
 
-final_df.show(50, truncate=False)
+delta.show(50, truncate=False)
 spark.stop()
 sys.exit(0)
