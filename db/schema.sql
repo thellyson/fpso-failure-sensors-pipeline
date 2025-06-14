@@ -3,8 +3,18 @@ CREATE SCHEMA IF NOT EXISTS bronze;
 CREATE SCHEMA IF NOT EXISTS silver;
 CREATE SCHEMA IF NOT EXISTS gold;
 
--- Criação do tipo ENUM para log_level
-CREATE TYPE IF NOT EXISTS log_level AS ENUM ('ERROR','WARNING');
+-- Criação do tipo ENUM log_level
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+      FROM pg_type
+     WHERE typname = 'log_level'
+  ) THEN
+    CREATE TYPE log_level AS ENUM ('ERROR','WARNING');
+  END IF;
+END
+$$;
 
 -- Tabelas do schema bronze
 CREATE TABLE IF NOT EXISTS bronze.equipment_failure_sensors (
