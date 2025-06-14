@@ -5,5 +5,4 @@ tests
 artifacts
 logs
 .vscode
-data
 dags

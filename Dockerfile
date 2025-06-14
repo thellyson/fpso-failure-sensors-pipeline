@@ -35,7 +35,7 @@ COPY spark-defaults.conf ${SPARK_HOME}/conf/
 COPY .env .env
 COPY scripts/ ./scripts
 COPY data/   ./data
-COPY tests/  ./tests
+
 
 # 5) Ponto de entrada padrão (pode ser sobrescrito no docker-compose)
 ENTRYPOINT ["spark-submit", "--master", "local[*]", "--jars", "/opt/spark/jars/postgresql-42.7.6.jar"]
