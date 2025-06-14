@@ -1,35 +1,51 @@
 import sys
-from functions.env_config import get_jdbc_url, get_jdbc_opts
+from functions.env_config import (
+    get_jdbc_url,
+    get_jdbc_opts,
+    PG_HOST,
+    PG_PORT,
+    PG_DB,
+    PG_USER,
+    PG_PASSWORD
+)
 from pathlib import Path
 import psycopg2
 from pyspark.sql import SparkSession
 
 BASE_DIR = Path(__file__).resolve().parent
 
-# 1) Conta o total de linhas na tabela de falhas
+# Count total rows in failures table
 conn = psycopg2.connect(
-    host="postgres",
-    dbname="fpso",
-    user="shape",
-    password="shape"
+    host=PG_HOST,
+    port=PG_PORT,
+    dbname=PG_DB,
+    user=PG_USER,
+    password=PG_PASSWORD
 )
+
 cur = conn.cursor()
 cur.execute("SELECT COUNT(*) FROM bronze.equipment_failure_sensors;")
 total_rows = cur.fetchone()[0]
 cur.close()
 conn.close()
 
-# 2) Cria sessão Spark
+if total_rows == 0:
+    print("No rows in Bronze; skipping Silver ingestion.")
+    sys.exit(0)
+
+# Spark session
 spark = SparkSession.builder \
     .appName("silver_ingest_equipment_failure_sensors") \
     .config("spark.driver.memory", "2g") \
     .config("spark.sql.shuffle.partitions", "20") \
     .getOrCreate()
 
+spark.sparkContext.setLogLevel("ERROR")
+
 jdbc_url    = get_jdbc_url()
 common_opts = get_jdbc_opts()
 
-# 3) Leitura das tabelas bronze sem particionamento pesado
+# Read bronze tables
 equipments_df = spark.read.format("jdbc") \
     .option("url", jdbc_url) \
     .options(**common_opts) \
@@ -47,8 +63,7 @@ sensors_df = spark.read.format("jdbc") \
 equipments_df = equipments_df.cache()
 sensors_df    = sensors_df.cache()
 
-# 4) Leitura particionada por número de linha (row_number)  
-#    subconsulta adiciona coluna rn de 1 até total_rows
+# Read failures with row number partitioning
 failures_df = spark.read.format("jdbc") \
     .option("url", jdbc_url) \
     .options(**common_opts) \
@@ -63,11 +78,10 @@ failures_df = spark.read.format("jdbc") \
     .option("numPartitions", "10") \
     .load()
 
-
-# 4.5) Filtra apenas as linhas com type_msg = 'ERROR'
+# Filter ERROR messages
 failures_df = failures_df.where("type_msg = 'ERROR'")
 
-# 5) Junta e seleciona colunas finais para silver
+# Join and select final columns
 silver_df = (failures_df
     .join(sensors_df.select("sensor_id","equipment_id"),
           on="sensor_id", how="left")
@@ -86,8 +100,7 @@ silver_df = (failures_df
     )
 )
 
-
-# 6) Carrega silver existente
+# Load existing silver data
 existing_silver = spark.read.format("jdbc") \
     .option("url", jdbc_url) \
     .options(**common_opts) \
@@ -95,13 +108,12 @@ existing_silver = spark.read.format("jdbc") \
     .load() \
     .select("id")
 
+# Filter new records
+to_insert = silver_df.join(existing_silver, on="id", how="left_anti").dropDuplicates(["id"])
 
-# 7) Filtra só registros novos
-to_insert = silver_df.join(existing_silver, on="id", how="left_anti")
-
-# 8) Insere registros novos
+# Insert new records
 if to_insert.rdd.isEmpty():
-    print("Nenhuma linha nova para Silver.")
+    print("No new rows for Silver.")
 else:
     to_insert.write \
         .format("jdbc") \
@@ -110,9 +122,9 @@ else:
         .options(**common_opts, batchsize="1000") \
         .mode("append") \
         .save()
-    print(f"{to_insert.count()} linha(s) inserida(s) em Silver.")
+    print(f"{to_insert.count()} row(s) inserted in Silver.")
 
-# 9) Mostra amostra para verificação
+# Show sample for verification
 to_insert.show(50, truncate=False)
 
 spark.stop()

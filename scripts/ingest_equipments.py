@@ -18,15 +18,12 @@ from pyspark.sql.types import (
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR.parent / "data"
 
-
 TIMESTAMP_RE = re.compile(
-    r"\[(\d{4})[-/](\d{1,2})[-/](\d{1,2})"             # data YYYY-M-D ou YYYY/M/D
-    r"(?:[ T](\d{1,2}):(\d{1,2}):(\d{1,2}))?\]"         # opcionalmente hora H:M:S
+    r"\[(\d{4})[-/](\d{1,2})[-/](\d{1,2})"             # date YYYY-M-D or YYYY/M/D
+    r"(?:[ T](\d{1,2}):(\d{1,2}):(\d{1,2}))?\]"         # optional time H:M:S
 )
 
-
-
-# permite override via ENV ou usa /data montado pelo Compose
+# Allow override via ENV or use /data mounted by Compose
 data_dir   = DATA_DIR
 #data_dir   = "./data"
 input_file = find_input_file(data_dir, "equipment", "json")
@@ -35,22 +32,23 @@ spark = SparkSession.builder \
 	.appName("bronze_ingest_equipments") \
 	.getOrCreate()
 
+spark.sparkContext.setLogLevel("ERROR")
 
-# Definição do esquema
+# Schema definition
 schema = StructType([
     StructField("equipment_id", LongType(), False),
     StructField("name", StringType(), False),
     StructField("group_name", StringType(), False)
 ])
 
-# Ler o arquivo JSON com o esquema
+# Read JSON file with schema
 df = spark.read.json(input_file, schema=schema, multiLine=True)
 
-# JDBC URL para Postgres
+# JDBC URL for Postgres
 jdbc_url   = get_jdbc_url()
 common_opts = get_jdbc_opts()
 
-#Carrega os equipment_id já existentes
+# Load existing equipment_ids
 existing = spark.read.format("jdbc") \
     .option("url", jdbc_url) \
     .options(**common_opts) \
@@ -58,12 +56,12 @@ existing = spark.read.format("jdbc") \
     .load() \
     .select("equipment_id")
 
-#Filtra apenas os novos
+# Filter new equipment
 new_equip = df.join(existing, on="equipment_id", how="left_anti")
 
-#Apenas insere se houver novidade
+# Insert only if there are new records
 if new_equip.rdd.isEmpty():
-    print("Nenhum equipamento novo para inserir.")
+    print("No new equipment to insert.")
 else:
     new_equip.write \
         .format("jdbc") \
@@ -72,8 +70,7 @@ else:
         .options(**common_opts) \
         .mode("append") \
         .save()
-    print(f"{new_equip.count()} equipamento(s) inserido(s).")
-
+    print(f"{new_equip.count()} equipment(s) inserted.")
 
 new_equip.show(50, truncate=False)
 spark.stop()

@@ -11,22 +11,22 @@ import psycopg2
 from psycopg2.extras import execute_values
 from functions.env_config import get_jdbc_url, get_jdbc_opts
 
-# diretório base (assume que o script ficará em dags/scripts)
+# base directory
 BASE_DIR = Path(__file__).resolve().parent
 
 
-# 1) Cria sessão Spark
+# Spark session
 spark = SparkSession.builder \
     .appName("gold_equipment_failures_summary") \
     .config("spark.driver.memory", "2g") \
     .config("spark.sql.shuffle.partitions", "20") \
     .getOrCreate()
 
-# 2) Opções JDBC comuns
+# JDBC settings
 jdbc_url    = get_jdbc_url()
 common_opts = get_jdbc_opts()
 
-# 3) Leitura da tabela silver.equipment_failure_sensors
+# Read source table
 silver_df = spark.read.format("jdbc") \
     .option("url", jdbc_url) \
     .options(**common_opts) \
@@ -37,23 +37,19 @@ silver_df = spark.read.format("jdbc") \
 #Cache
 silver_df = silver_df.cache()
 
-# 4) Agregações:
-
-# 4.1) Total de falhas por equipamento
+# Aggregations
 equipment_totals = (
     silver_df
     .groupBy("equipment_id", "name", "group_name")
     .agg(count("*").alias("total_failures"))
 )
 
-# 4.2) Média de falhas por ativo em cada grupo
 group_avg = (
     equipment_totals
     .groupBy("group_name")
     .agg(avg("total_failures").alias("avg_failures_per_asset"))
 )
 
-# 4.3) Total de falhas por sensor em cada equipamento
 sensor_totals = (
     silver_df
     .groupBy("equipment_id", "sensor_id",)
@@ -62,7 +58,7 @@ sensor_totals = (
 	
 )
 
-# 4.4) Ranking dos sensores
+# Sensor rankings
 window_by_equipment = Window.partitionBy("equipment_id") \
                             .orderBy(col("sensor_failures").desc())
 window_by_group     = Window.partitionBy("f_group_name") \
@@ -72,7 +68,7 @@ sensor_ranked = sensor_totals \
     .withColumn("sensor_rank_by_equipment", rank().over(window_by_equipment)) \
     .withColumn("sensor_rank_by_equipment_group", rank().over(window_by_group))
 
-# 5) Monta o DataFrame final do Gold unindo tudo
+# Final DataFrame
 gold_df = (
     equipment_totals
     .join(group_avg,    on="group_name", how="inner")
@@ -90,7 +86,7 @@ gold_df = (
     )
 )
 
-#Escrita na tabela
+# Write results
 gold_df.write \
     .format("jdbc") \
     .option("url", jdbc_url) \
@@ -100,7 +96,7 @@ gold_df.write \
     .option("truncate", "true") \
     .save()
 
-print("Tabela gold.equipment_failures_summary atualizada (overwrite).")
+print("Table gold.equipment_failures_summary updated.")
 
 spark.stop()
 sys.exit(0)

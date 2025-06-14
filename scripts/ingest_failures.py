@@ -19,10 +19,9 @@ from pyspark.sql.types import (
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR.parent / "data"
 
-
 TIMESTAMP_RE = re.compile(
-    r"\[(\d{4})[-/](\d{1,2})[-/](\d{1,2})"             # data YYYY-M-D ou YYYY/M/D
-    r"(?:[ T](\d{1,2}):(\d{1,2}):(\d{1,2}))?\]"         # opcionalmente hora H:M:S
+    r"\[(\d{4})[-/](\d{1,2})[-/](\d{1,2})"             # date YYYY-M-D or YYYY/M/D
+    r"(?:[ T](\d{1,2}):(\d{1,2}):(\d{1,2}))?\]"         # optional time H:M:S
 )
 
 def parse_line_to_row(line: str):
@@ -30,10 +29,10 @@ def parse_line_to_row(line: str):
     if not line:
         return None
 
-    # --- 1) Extrai e parseia o timestamp robustamente ---
+    # Extract and parse timestamp
     m = TIMESTAMP_RE.match(line)
     if not m:
-        print(f"[WARN] timestamp inválido: {line!r}", file=sys.stderr)
+        print(f"[WARN] invalid timestamp: {line!r}", file=sys.stderr)
         return None
 
     yr, mo, dy, hh, mi, ss = m.groups()
@@ -44,20 +43,20 @@ def parse_line_to_row(line: str):
     ts = datetime.datetime(year, month, day, hour, minute, second)
 
     try:
-        # --- 2) Quebra em 4 partes por tab ---
+        # Split into 4 parts by tab
         parts = line.split('\t', 3)
         if len(parts) < 4:
-            print(f"[WARN] formato inesperado (menos de 4 colunas): {line!r}", file=sys.stderr)
+            print(f"[WARN] unexpected format (less than 4 columns): {line!r}", file=sys.stderr)
             return None
 
-        level     = parts[1]            # ERROR ou WARNING
+        level     = parts[1]            # ERROR or WARNING
         sensorseg = parts[2]            # ex: sensor[5820]:
         metrics   = parts[3].strip()    # ex: (temperature\t311.29, vibration\t6749.50)
 
-        # --- 3) Extrai sensor_id ---
+        # Extract sensor_id
         sid = int(re.search(r"\[(\d+)\]", sensorseg).group(1))
 
-        # --- 4) Limpa parênteses e separa temperatura/vibração ---
+        # Clean parentheses and split temperature/vibration
         if metrics.startswith('(') and metrics.endswith(')'):
             metrics = metrics[1:-1]
         temp_str, vib_str = [m.strip() for m in metrics.split(',')]
@@ -67,7 +66,7 @@ def parse_line_to_row(line: str):
             return None
         vib_val  = float(vib_raw)
 
-        # --- 5) Monta o Row para o schema Bronze ---
+        # Create Row for Bronze schema
         return Row(
             id=f"{ts.isoformat()}_{sid}",
             type_msg    = level,
@@ -77,11 +76,10 @@ def parse_line_to_row(line: str):
             ts_utc      = ts
         )
     except Exception as e:
-        print(f"[WARN] não parseou linha: {line!r} -> {e}", file=sys.stderr)
+        print(f"[WARN] failed to parse line: {line!r} -> {e}", file=sys.stderr)
         return None
 
-
-# permite override via ENV ou usa /data montado pelo Compose
+# Allow override via ENV or use /data mounted by Compose
 data_dir   = DATA_DIR
 #data_dir   = "./data"
 input_file = find_input_file(data_dir, "equipment_failure_sensors", "txt")
@@ -90,7 +88,9 @@ spark = SparkSession.builder \
 	.appName("bronze_ingest_failures") \
 	.getOrCreate()
 
-# lê texto bruto e aplica parse_line_to_row em Python
+spark.sparkContext.setLogLevel("ERROR")
+
+# Read raw text and apply parse_line_to_row in Python
 rdd = (
 	spark.read.text(input_file)
 			.rdd
@@ -98,7 +98,7 @@ rdd = (
 			.filter(lambda row: row is not None)
 )
 
-# schema idêntico ao da tabela bronze
+# Schema identical to bronze table
 schema = StructType([
 	StructField("id",           StringType(),  False),
 	StructField("type_msg",     StringType(),  False),
@@ -110,12 +110,13 @@ schema = StructType([
 
 final_df = spark.createDataFrame(rdd, schema)
 
-# escreve via JDBC no Postgres
+final_df = final_df.dropDuplicates(["id"])
+
+# Write via JDBC to Postgres
 jdbc_url    = get_jdbc_url()
 common_opts = get_jdbc_opts()
 
-
-#Carrega ids já gravados
+# Load existing ids
 existing_ids = spark.read.format("jdbc") \
     .option("url", jdbc_url) \
     .options(**common_opts) \
@@ -123,11 +124,15 @@ existing_ids = spark.read.format("jdbc") \
     .load() \
     .select("id")
 
-#Filtra apenas as falhas novas
-delta = final_df.join(existing_ids, on="id", how="left_anti")
+# Filter new failures
+delta = (
+    final_df
+    .join(existing_ids, on="id", how="left_anti")
+    .dropDuplicates(["id"]) 
+)
 
 if delta.rdd.isEmpty():
-    print("Nenhuma falha nova para inserir.")
+    print("No new failures to insert.")
 else:
     delta.write \
         .format("jdbc") \
@@ -136,8 +141,7 @@ else:
         .options(**common_opts) \
         .mode("append") \
         .save()
-    print(f"{delta.count()} falha(s) inserida(s).")
-
+    print(f"{delta.count()} failure(s) inserted.")
 
 delta.show(50, truncate=False)
 spark.stop()

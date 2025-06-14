@@ -2,7 +2,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-# Lista de scripts a serem executados em sequência
+#List of scripts to be executed in sequence
 default_scripts = [
     "ingest_equipments.py",
     "ingest_equipment_sensors.py",
