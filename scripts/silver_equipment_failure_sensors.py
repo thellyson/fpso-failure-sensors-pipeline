@@ -19,7 +19,7 @@ total_rows = cur.fetchone()[0]
 cur.close()
 conn.close()
 
-# 2) Cria sessão Spark (aumente driver.memory se necessário)
+# 2) Cria sessão Spark
 spark = SparkSession.builder \
     .appName("silver_ingest_equipment_failure_sensors") \
     .config("spark.driver.memory", "2g") \

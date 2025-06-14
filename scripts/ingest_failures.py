@@ -84,7 +84,7 @@ def parse_line_to_row(line: str):
 # permite override via ENV ou usa /data montado pelo Compose
 data_dir   = DATA_DIR
 #data_dir   = "./data"
-input_file = find_input_file(data_dir, "equpment_failure_sensors", "txt")
+input_file = find_input_file(data_dir, "equipment_failure_sensors", "txt")
 
 spark = SparkSession.builder \
 	.appName("bronze_ingest_failures") \

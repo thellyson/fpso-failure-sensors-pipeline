@@ -35,6 +35,7 @@ COPY spark-defaults.conf ${SPARK_HOME}/conf/
 COPY .env .env
 COPY scripts/ ./scripts
 COPY data/   ./data
+COPY dash.py ./
 
 
 # 5) Ponto de entrada padrão (pode ser sobrescrito no docker-compose)

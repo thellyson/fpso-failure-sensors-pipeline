@@ -47,6 +47,25 @@ services:
     # comando padrão já vem do ENTRYPOINT do Dockerfile,
     command: ["scripts/run_pipeline.py"]
 
+
+  dashboard:
+    build:
+      context: .
+    env_file:
+      - .env
+    volumes:
+      - .:/app
+    ports:
+      - "8501:8501"
+    depends_on:
+      - postgres
+    entrypoint:
+      - streamlit
+      - run
+      - dash.py
+      - --server.port=8501
+      - --server.address=0.0.0.0
+
   
 volumes:
   pgdata:
