@@ -6,3 +6,5 @@ artifacts
 logs
 .vscode
 dags
+/data/*
+!/logs/.gitkeep
